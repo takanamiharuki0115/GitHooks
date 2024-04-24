@@ -1,0 +1,332 @@
+//@ts-disabled-nocheck
+
+import * as express from "express"
+import { moment, mysqlEscape, safeParse, stringify } from "../frd-components/import/common"
+import * as renderer from "./controllers/renderer"
+import {
+    _executeQueryInFrdc,
+    autoDeploy,
+    backupFrdcLangPhrasesTable,
+    callNumber,
+    clearSelectedLeads,
+    clearSession,
+    convertFileToDataURI,
+    createTTSAudio,
+    deleteCustomerLogo,
+    deleteLeadLock,
+    deployToSalesforce,
+    execQuery,
+    execQueryInAny,
+    execQueryInCRM,
+    execQueryInStream,
+    executeQueryInAny,
+    executeQueryInCRM,
+    executeQueryInFrdc,
+    frdcFetch,
+    generateCallReportCSV,
+    generateCallReportCSVWithFormJSON,
+    generateLeadCSV,
+    getAudioFiles,
+    getCustomerLogo,
+    getExternalInfo,
+    getFrdc,
+    getFrdcDBTables,
+    getFrdcFormData,
+    getLeadLock,
+    getLeadNameAndTitleByLeadId,
+    getLoginInfoFromToken,
+    getRepliedUsersInfo,
+    getSForceUsers,
+    getSmsSender,
+    getSpeedTest,
+    getStatisState,
+    getTTSText,
+    getTTSTextBulk,
+    getUserState,
+    getVersion,
+    liveInbound,
+    loadSForceLeads,
+    login,
+    loginCheck,
+    loginFromOutside,
+    logout,
+    mailTemplateAdd,
+    mailTemplateDBInit,
+    mailTemplateDelete,
+    notify,
+    postFile,
+    postFrdc,
+    postFrdcWithFile,
+    postFrdcWithIconImage,
+    postFrdcWithLogoImage,
+    proxyC,
+    proxyM,
+    proxyQ,
+    pushErrorLog,
+    redisTest,
+    reloadDialplan,
+    restartServer,
+    runMecab,
+    runMecabBulk,
+    salesForceLoginCheck,
+    save,
+    saveStringToFile,
+    sendInternalChatMsg,
+    sendManagerRequest,
+    sendNoticeToSlack,
+    sendSms,
+    sendSmsBulk,
+    setCustomerLogo,
+    setLeadLock,
+    setMohEntry,
+    setUserState,
+    storeSalesMImport,
+    syncFromCRM,
+    syncToCRM,
+    updateAgentJs,
+    updateOPCHtml,
+    updateRepliedUsersInfo,
+} from "./controllers/renderer/util"
+const url = require("url")
+const fs = require("fs")
+
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+// テストデータファイルの生成（一度だけ実行する）
+const testData = Buffer.alloc(100 * 1024 * 1024, "A") // 100MBのデータ
+fs.writeFileSync("testData.dat", testData)
+
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+export function usedSize() {
+    let used = 0
+    used = process.memoryUsage().heapUsed
+    return Math.round((used / 1024 / 1024) * 100) / 100 + "M"
+}
+
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+const upload = require("multer")({
+    dest: "./uploads/",
+    limits: {
+        fieldNameSize: 2 * 1024 ** 3,
+        fieldSize: 2 * 1024 ** 3,
+        fields: 2 * 1024 ** 3,
+        fileSize: 2 * 1024 ** 3,
+        files: 2 * 1024 ** 3,
+        parts: 2 * 1024 ** 3,
+        headerPairs: 2 * 1024 ** 3,
+    },
+})
+
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+export function log({ msg = null, req = null }) {
+    console.log(
+        `${moment().format("YYYY/MM/DD HH:mm:ss.SSS")}:[${process.pid}] path=>${req?.path} cookies=>${JSON.stringify(req?.cookies || {})} body=>${JSON.stringify(
+            req?.body || {}
+        )} msg=>${JSON.stringify(msg || {})}`
+    )
+}
+
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+const handleRedirection = async (req, res) => {
+    const { smsId, lead_id, index } = req.params
+    const row = await getRepliedUsersInfo(smsId)
+    let redirectUrl = ""
+    if (row[0].url.includes(",")) {
+        redirectUrl = row[0].url.split(",")[index]
+    } else redirectUrl = row[0].url
+
+    const repliedUsers = safeParse(row[0].replied_users) || []
+
+    //[ { urlId: 0, timeStamp: "YYYY-MM-DD HH:mm:SS", leadId: 12345, etc ... },{ urlId: 0, timeStamp: "YYYY-MM-DD HH:mm:SS", leadId: 23456, etc ... }, ... ]
+
+    repliedUsers.push({ urlId: index, timeStamp: moment().format("YYYY-MM-DD HH:mm:ss"), leadId: lead_id })
+    await updateRepliedUsersInfo(smsId, stringify(repliedUsers))
+
+    const { last_name, first_name, title } = (await getLeadNameAndTitleByLeadId(lead_id)) || { last_name: "", first_name: "", title: "不明なリード" }
+    const name = (last_name ? `${last_name?.replace(/　+/g, " ")}${first_name?.length > 0 && !RegExp(first_name).test(last_name) ? first_name : ""}` : title ? title : "不明なリード").replace(
+        /['"]+/g,
+        ""
+    )
+
+    const sender: any = await getSmsSender(smsId)
+    if (sender.length !== 0) {
+        await _executeQueryInFrdc(
+            `INSERT INTO websocket_commmands (src, target, req, status, params_json) values ("test", "/user/${
+                sender[0].sender
+            }", "runFunc", "Created", '{ "func": "showNotification", "funcParams": { "mode":"sms-url-click", "seconds": 86400, "params": { "leadId": "${lead_id}", "name": "${mysqlEscape(
+                name
+            )}", "url": "${mysqlEscape(redirectUrl.replace(/['"]+/g, ""))}" } } }');`
+        )
+    }
+
+    res.redirect(redirectUrl)
+}
+
+// -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+export async function router(app: express.Application) {
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    app.use("/favicon.ico", (_, res) => res.status(200).send())
+    app.use("/robots.txt", express.static("dist/client/robots.txt"))
+
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+    // redirection
+    app.use("/api/redirect/:smsId/:lead_id/:index", handleRedirection)
+
+    // for PWA
+    app.use("/service-worker.js", express.static("dist/client/service-worker.js"))
+
+    // logger
+    let f = false
+    app.use((req, res, next) => {
+        log({ req })
+        if (/^\/images\//.test(req?.path)) {
+            res.end()
+            f = true
+            return
+        } else next()
+    })
+    if (f) return
+
+    // // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    // app.use((req, res, next) => {
+    //   const { query, params } = (req?.body || {})
+    //   const onEnd = () => {
+    //     log({ req, msg: ["execQuery: onEnd: ", query, params, usedSize()] });
+    //     /q0025/.test(query) && /AND true/.test(params[3]) && (
+    //       log({ req, msg: ["execQuery: globalThis.gc:  pre: ", usedSize()] }),
+    //       globalThis.gc?.(),
+    //       log({ req, msg: ["execQuery: globalThis.gc: post: ", usedSize()] })
+    //     );
+    //     res.end("ok")
+    //   }
+    //   req?.on("end", onEnd)
+    //   next()
+    // });
+
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    app.post("/openapi/sales-force-login/:user/:pass/:number", salesForceLoginCheck)
+
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    app.use("/public", express.static("dist/client"))
+
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    app.post("/deploy", autoDeploy)
+
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    app.post("/eapi/ea0", callNumber)
+
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    app.post("/api/a0", frdcFetch)
+    app.post("/api/a1", backupFrdcLangPhrasesTable)
+    app.post("/api/a2", executeQueryInFrdc)
+    app.post("/api/a3", executeQueryInCRM)
+    app.post("/api/a4", getAudioFiles)
+    app.post("/api/a5", createTTSAudio)
+    app.post("/api/a6", reloadDialplan)
+    app.post("/api/a7", getFrdcDBTables)
+    app.post("/api/a8", getFrdc)
+    app.post("/api/a9", postFrdc)
+    app.post("/api/a10", getFrdcFormData)
+    app.post("/api/a11", setMohEntry)
+    app.post("/api/aa", upload.single("File"), postFrdcWithFile)
+    app.post("/api/ab", notify)
+    app.post("/api/ac", upload.single("file"), postFile)
+    app.post("/api/ad", getVersion)
+    app.post("/api/ae", restartServer)
+    app.post("/api/af", sendManagerRequest)
+    app.post("/api/ag/:name", save)
+    app.post("/api/ah", login)
+    app.post("/api/ahx", loginFromOutside)
+    app.post("/api/ahy", getLoginInfoFromToken)
+    app.post("/api/ai", loginCheck)
+    app.post("/api/aj", sendInternalChatMsg) /* [send/recv-seq]: 6 */
+    app.post("/api/ak", updateOPCHtml)
+    app.post("/api/al", syncToCRM)
+    app.post("/api/am", syncFromCRM)
+    app.post("/api/an", getUserState)
+    app.post("/api/ao", setUserState)
+    app.post("/api/ap", upload.single("file"), convertFileToDataURI)
+    app.post("/api/aq", getTTSText)
+    app.post("/api/ar", getStatisState)
+    app.post("/api/as", executeQueryInAny)
+    app.post("/api/at", runMecab)
+    app.post("/api/au", runMecabBulk)
+    app.post("/api/av", getTTSTextBulk)
+    app.post("/api/aw", upload.single("file"), postFrdcWithIconImage)
+    app.post("/api/aw2", upload.single("file"), postFrdcWithLogoImage)
+    app.post("/api/ax", generateCallReportCSV)
+    app.post("/api/ay", (req, res) => {
+        clearSession(req.body.userName), res.encrypt({ success: true })
+    })
+    app.post("/api/az", generateCallReportCSVWithFormJSON)
+    app.post("/api/ba", generateLeadCSV)
+    app.post("/api/bb", execQueryInStream)
+    // app.post('/api/bc', publishToChannel)
+    // app.post('/api/bd', subscribeToChannel)
+    app.post("/api/be", liveInbound)
+    app.post("/api/bf", setCustomerLogo)
+    app.post("/api/bg", getCustomerLogo)
+    app.post("/api/bh", deleteCustomerLogo)
+    app.post("/api/bi", mailTemplateDBInit)
+    app.post("/api/bj", mailTemplateAdd)
+    app.post("/api/bk", mailTemplateDelete)
+
+    app.post("/api/bl", sendSms)
+    app.post("/api/bm", sendSmsBulk)
+
+    app.post("/api/bn", setLeadLock)
+    app.post("/api/bo", getLeadLock)
+    app.post("/api/bp", deleteLeadLock)
+    app.post("/api/bq", saveStringToFile)
+
+    app.post("/api/zq", proxyQ)
+    app.post("/api/zc", proxyC)
+    app.post("/api/zm", proxyM)
+
+    app.post("/api/aa2", execQuery)
+    app.post("/api/aa3", execQueryInCRM)
+    app.post("/api/aas", execQueryInAny)
+
+    app.post("/api/dev1", updateAgentJs)
+    app.post("/api/sfa", getSForceUsers)
+    // app.post('/api/sfb', getSForceLeads)
+    app.post("/api/sfc", getExternalInfo)
+    app.post("/api/sfd", loadSForceLeads)
+    app.post("/api/sfe", pushErrorLog)
+    app.post("/api/smi", storeSalesMImport)
+    app.post("/api/sts", sendNoticeToSlack)
+    app.post("/api/sff", deployToSalesforce)
+    app.post("/api/sfg", clearSelectedLeads)
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    app.post("/wf/test1", (data) => {
+        console.log(data)
+    })
+    app.post("/api/test/001", redisTest)
+
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    //app.get('/logout', logout)
+    app.get("/dologout", logout)
+
+    app.post("/api/speedtest", getSpeedTest)
+
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -
+
+    // テストデータの提供
+    app.post("/api/loadtest", (req, res) => {
+        // 10MB のテストデータ
+        const filesize = 10 * 1024 * 1024
+        const testData = "*".repeat(filesize)
+        return res.encrypt({ success: true, file: testData })
+    })
+    // アップロード用のエンドポイント
+    app.post("/api/uploadtest", upload.single("file"), (req, res) => {
+        const totalBytes = Buffer.byteLength(JSON.stringify(req.body))
+        return res.encrypt({ success: true, mes: `Uploaded: ${totalBytes} bytes` })
+    })
+    app.post("/api/ping", (req, res) => {
+        // return res.status(200).send('pong');
+        return res.encrypt({ success: true })
+    })
+    // -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+    app.get("*", renderer.get)
+}
