@@ -1,6 +1,6 @@
 //@ts-disabled-nocheck
 
-// 230819
+// 23081
 // alter table frdcall_admins add column sms_id varchar(255) default "";
 // alter table frdcall_admins add column sms_pw varchar(255) default "";
 // alter table frdcall_admins add index sms_id_ind(sms_id);
