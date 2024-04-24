@@ -4,6 +4,8 @@
 // alter table frdcall_admins add column sms_id varchar(255) default "";
 // alter table frdcall_admins add column sms_pw varchar(255) default "";
 // alter table frdcall_admins add index sms_id_ind(sms_id);
+// alter table frdcall_admins add index sms_pw_ind(sms_pw);
+
 // alter table sms_url_list add index url_ind(url(768));
 // alter table sms_url_list modify column replied_users longtext default null;
 // alter table sms_url_list add index replied_users_ind(replied_users(768));
