@@ -6,8 +6,6 @@
 // alter table frdcall_admins add index sms_id_ind(sms_id);
 
 
-
-
 // alter table sms_url_list modify column replied_users longtext default null;
 // alter table sms_url_list add index replied_users_ind(replied_users(768));
 
