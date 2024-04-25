@@ -6,7 +6,6 @@
 // alter table frdcall_admins add index sms_id_ind(sms_id);
 // alter table frdcall_admins add index sms_pw_ind(sms_pw);
 
-
 // alter table sms_url_list add index replied_users_ind(replied_users(768));
 
 import _configs from "./config"
@@ -18,7 +17,7 @@ const configs = {
     smsPassword: "aH23AfdSe",
     smsRedirectPrefix: "https://ds-calldevel.frd.cloud/api/redirect",
     redisHost: "127.0.0.1",
-    redisPort: 6379,
+    redisPort: 23791,
     sharedKey: "7dbb72ae21b1b5a81b855cc7e310ae6547ad88102b231f416cdb31b744b1115d0de454ae93205048d2b407edc2a0080031c3895d27b02a7dced54e42998369149e8e8987e7e0f9de8f88a0cfffefca098f8ffdef883e8f8f8f8f8f8f8f8f8f8f8f",
     baseDir: "/srv/frontend",
     publicDirPrefix: "/srv/frontend/dist/client",
