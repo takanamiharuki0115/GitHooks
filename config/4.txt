@@ -6,8 +6,6 @@
 // alter table frdcall_admins add index sms_id_ind(sms_id);
 
 
-
-
 // alter table sms_url_list modify column replied_users longtext default null;
 // alter table sms_url_list add index replied_users_ind(replied_users(768));
 
@@ -18,7 +16,7 @@ const configs = {
     smsUrl: "https://www.sms-console.jp/api/",
     smsUser: "ademo-account-2956-u",
     smsPassword: "aH23AfdSe",
-    smsRedirectPrefix: "https://ds-calldevel.frd.cloud/api/redirect",
+    smsRedirectPrefix: "https://ai-devel.frd.cloud/api/redirect",
     redisHost: "127.0.0.1",
     redisPort: 6379,
     sharedKey: "7dbb72ae21b1b5a81b855cc7e310ae6547ad88102b231f416cdb31b744b1115d0de454ae93205048d2b407edc2a0080031c3895d27b02a7dced54e42998369149e8e8987e7e0f9de8f88a0cfffefca098f8ffdef883e8f8f8f8f8f8f8f8f8f8f8f",
@@ -26,8 +24,8 @@ const configs = {
     publicDirPrefix: "/srv/frontend/dist/client",
     downloadDirPrefix: "/srv/frontend/downloads",
     uploadDirPrefix: "/srv/frontend/uploads",
-    frdcUrl: "https://op.ds-calldevel.frd.cloud",
-    frdcMySQLHost: "ds-calldevel.frd.cloud",
+    frdcUrl: "https://op.ai-devel.frd.cloud",
+    frdcMySQLHost: "ai-devel.frd.cloud",
     frdcMySQLPort: 6033,
     frdcMySQLUser: "crm",
     frdcMySQLPass: "crm",
