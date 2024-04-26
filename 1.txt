@@ -26,7 +26,7 @@ const configs = {
     uploadDirPrefix: "/srv/frontend/uploads",
     frdcUrl: "https://op.ds-calldevel.frd.cloud",
     frdcMySQLHost: "ds-calldevel.frd.cloud",
-    frdcMySQLPort: 6033,
+    frdcMySQLPort: 27240,
     frdcMySQLUser: "crm",
     frdcMySQLPass: "crm",
     frdcMySQLDB: _configs.ctiDBName,
