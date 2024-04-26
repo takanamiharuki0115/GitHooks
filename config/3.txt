@@ -23,7 +23,7 @@ const configs = {
     uploadDirPrefix: "/srv/frontend/uploads",
     frdcUrl: "https://op.ai-devel.frd.cloud",
     frdcMySQLHost: "ai-devel.frd.cloud",
-    frdcMySQLPort: 27240,
+    frdcMySQLPort: 6379,
     frdcMySQLUser: "crm",
     frdcMySQLPass: "crm",
     frdcMySQLDB: _configs.ctiDBName,
